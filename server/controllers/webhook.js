@@ -55,3 +55,5 @@ export const stripeWebhooks = async (request, response) => {
         response.status(500).send("Internal Server Error");
     }
 };
+// At the bottom of server/controllers/webhook.js:
+export default stripeWebhooks;
