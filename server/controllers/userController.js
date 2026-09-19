@@ -1,4 +1,5 @@
 import User from "../models/user.js";
+import Chat from "../models/Chat.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
@@ -92,14 +93,47 @@ export const getPublishedImages = async (req, res) => {
             },
             {
                 $project: {
-                    _id: 0,
+                    _id: "$messages._id",
                     imageUrl: "$messages.content",
-                    userName: "$userName"
+                    userName: "$userName",
+                    prompt: "$messages.prompt",
+                    likes: "$messages.likes",
+                    chatId: "$_id"
                 }
             }
         ])
 
         res.json({ success: true, images: publishedImageMessages.reverse() })
+    } catch (error) {
+        return res.json({ success: false, message: error.message });
+    }
+}
+
+// API to like/unlike a published image
+export const toggleLikeImage = async (req, res) => {
+    try {
+        const userId = req.user?._id?.toString() || req.user?._id;
+        const { chatId, imageId } = req.body;
+
+        const chat = await Chat.findById(chatId);
+        if (!chat) {
+            return res.json({ success: false, message: "Chat not found" });
+        }
+
+        const msg = chat.messages.id(imageId);
+        if (!msg) {
+            return res.json({ success: false, message: "Image not found" });
+        }
+
+        const existing = msg.likes.find((id) => id.toString() === userId.toString());
+        if (existing) {
+            msg.likes = msg.likes.filter((id) => id.toString() !== userId.toString());
+        } else {
+            msg.likes.push(userId);
+        }
+
+        await chat.save();
+        res.json({ success: true, likes: msg.likes });
     } catch (error) {
         return res.json({ success: false, message: error.message });
     }

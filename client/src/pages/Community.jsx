@@ -162,7 +162,13 @@ const Community = () => {
     );
 
     try {
-      await axios.post('/api/user/toggle-like-image', { id: image._id });
+      const { data } = await axios.post('/api/user/toggle-like-image', {
+        chatId: image.chatId,
+        imageId: image._id,
+      });
+      if (!data?.success) {
+        setImages((prev) => prev.map((img) => (img._id === image._id ? image : img)));
+      }
     } catch (err) {
       // Revert on failure
       setImages((prev) => prev.map((img) => (img._id === image._id ? image : img)));
