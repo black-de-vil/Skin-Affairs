@@ -6,26 +6,106 @@ import User from "../models/user.js";
 import imagekit from "../configs/imagekit.js";
 import openai from "../configs/openai.js"; // adjust the path/name if yours differs
 
-// Text-based AI Chat Message Controller
+// AI models tried in order — later models only run if an earlier one is
+// unavailable/overloaded (503/429). Order = newest → most stable fallback.
+const MODEL_CHAIN = ["gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"];
+
+// Hard cap on photos a user can attach to a single message.
+const MAX_IMAGES_PER_MESSAGE = 5;
+
+// Master system prompt: keeps the AI in the role of a skincare expert and
+// enforces scope (only skin-related topics) plus medical disclaimers.
+const SYSTEM_PROMPT = `You are Skin Affairs, a warm, expert virtual skincare consultant and dermatology assistant.
+
+## Role
+- Give practical, evidence-based advice on skincare: routines, product selection and ingredients, acne, dryness, oiliness, sensitivity, hyperpigmentation, ageing, sun protection, body care, and general skin health.
+- If the user uploads one or more photos, examine their visible skin and describe what you observe (tone, texture, apparent concerns) and tailor your advice to it. Be honest that photos alone cannot capture everything, and never overclaim what can be diagnosed from an image.
+
+## Boundaries — what you MUST NOT do
+- Do not answer questions outside skin care and skin health (e.g. coding, software/website development, maths, homework, cooking, current events, general trivia, or any other topic). Politely decline and steer the user back to skin-related topics.
+- Do not diagnose or treat medical conditions, prescribe or recommend prescription medication, or give advice that overrides a doctor. Include a brief disclaimer when relevant: you are not a doctor, and for suspected conditions, infections, rashes, or persistent symptoms the user should consult a licensed dermatologist or healthcare provider.
+- Do not encourage unsafe or harmful practices, DIY chemical peels, or misuse of medical products.
+
+## Style
+- Be concise, warm, and structured (short paragraphs or bullet lists).
+- When needed, ask a single clarifying question (skin type, current routine, products used, etc.) so you can tailor the advice.
+- Remind the user that a photo-based assessment is informational and not a medical diagnosis.`;
+
+// Returns true for transient failures (overload / rate-limit) so the model
+// chain can fall through to the next model; other errors fail fast.
+function isRetryable(error) {
+    return error?.status === 503 || error?.status === 429 || /UNAVAILABLE|high demand|rate.?limit|overloaded/i.test(error?.message || "");
+}
+
+// Uploads a base64 data URL to ImageKit, returning the public CDN URL used
+// for displaying the photo in chat history.
+async function uploadImage(base64) {
+    const uploadResponse = await imagekit.upload({
+        file: base64,
+        fileName: `chat-${Date.now()}.png`,
+        folder: "SkinAffairs/chat",
+    });
+    return uploadResponse.url;
+}
+
+// Builds the OpenAI-style multimodal message content. Gemini's
+// OpenAI-compatible endpoint only accepts inline base64 data URLs for
+// images, so the data URLs are passed straight through to the model.
+function buildContent(prompt, imageDataUrls) {
+    const content = [{ type: "text", text: prompt }];
+    for (const dataUrl of imageDataUrls || []) {
+        content.push({ type: "image_url", image_url: { url: dataUrl } });
+    }
+    return content;
+}
+
+// Calls the model, retrying the same prompt across MODEL_CHAIN until one
+// succeeds. The system prompt is always prepended to enforce the assistant's
+// role and scope.
+async function createWithFallback(prompt, imageDataUrls) {
+    let lastError;
+    for (const model of MODEL_CHAIN) {
+        try {
+            const { choices } = await openai.chat.completions.create({
+                model,
+                messages: [
+                    { role: "system", content: SYSTEM_PROMPT },
+                    { role: "user", content: buildContent(prompt, imageDataUrls) },
+                ],
+            });
+            if (choices?.length) return choices[0].message;
+            lastError = new Error(`No choices returned for ${model}`);
+        } catch (error) {
+            lastError = error;
+            if (!isRetryable(error)) throw error;
+        }
+    }
+    throw lastError;
+}
+
+// Text-based AI Chat Message Controller — supports text-only and text+images.
 export const textMessageController = async (req, res) => {
     try {
         const userId = req.user._id;
-        const { chatId, prompt } = req.body;
+        // `images` holds base64 data URLs from the client; a legacy single
+        // `image` field is also accepted for backwards compatibility.
+        const { chatId, prompt = "", image, images } = req.body;
+
+        const incoming = image ? [image] : Array.isArray(images) ? images : [];
+        if (incoming.length > MAX_IMAGES_PER_MESSAGE) {
+            return res.json({ success: false, message: `You can attach up to ${MAX_IMAGES_PER_MESSAGE} images per message.` });
+        }
 
         const chat = await Chat.findOne({ userId, _id: chatId });
-        chat.messages.push({ role: "user", content: prompt, timestamp: Date.now(), isImage: false });
 
-        const { choices } = await openai.chat.completions.create({
-            model: "gemini-3.7-flash",
-            messages: [
-                {
-                    role: "user",
-                    content: prompt,
-                },
-            ],
-        });
+        // Persist each photo to ImageKit so the public URLs survive in chat
+        // history, but send the original inline data URLs to the model.
+        const imageUrls = await Promise.all(incoming.map((img) => uploadImage(img)));
 
-        const reply = { ...choices[0].message, timestamp: Date.now(), isImage: false };
+        chat.messages.push({ role: "user", content: prompt, image: imageUrls, timestamp: Date.now(), isImage: false });
+
+        const reply = { ...(await createWithFallback(prompt, incoming)), timestamp: Date.now(), isImage: false };
+
         res.json({ success: true, reply });
 
         chat.messages.push(reply);
@@ -91,6 +171,7 @@ export const imageMessageController = async (req, res) => {
             timestamp: Date.now(),
             isImage: true,
             isPublished: Boolean(isPublished),
+            prompt,
         };
 
         res.json({ success: true, reply });

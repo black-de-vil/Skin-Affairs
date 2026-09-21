@@ -73,7 +73,7 @@ export const SkinAffairsLogo = ({ isCollapsed }) => {
 };
 
 const Sidebar = () => {
-  const { chats, setSelectedChat, theme, setTheme, user, navigate } = useAppContext();
+  const { chats, setSelectedChat, theme, setTheme, user, navigate, newChat, deleteChat, logout } = useAppContext();
   const [search, setSearch] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(true);
 
@@ -121,7 +121,10 @@ const Sidebar = () => {
 
           {/* New Chat Button */}
           <button 
-            onClick={() => setIsMenuOpen(false)}
+            onClick={() => {
+              newChat && newChat();
+              setIsMenuOpen(false);
+            }}
             className="flex justify-center items-center w-full py-2 mt-4 text-white bg-gradient-to-r from-[#A456F7] to-[#3D81F6] text-sm rounded-md cursor-pointer flex-shrink-0 hover:opacity-90 transition-opacity"
           >
             <span className="mr-2 text-xl">+</span> New Chat
@@ -170,6 +173,10 @@ const Sidebar = () => {
                       </div>
                       <img 
                         src={assets.bin_icon} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (deleteChat) deleteChat(chat._id);
+                        }}
                         className="hidden group-hover:block w-4 h-4 cursor-pointer not-dark:invert flex-shrink-0" 
                         alt="Delete" 
                       />
@@ -237,6 +244,7 @@ const Sidebar = () => {
             {user && (
               <img 
                 src={assets.logout_icon} 
+                onClick={() => logout && logout()}
                 className="h-5 w-5 cursor-pointer hidden not-dark:invert group-hover:block flex-shrink-0" 
                 alt="Logout" 
               />

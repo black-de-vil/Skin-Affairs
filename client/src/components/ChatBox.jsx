@@ -10,6 +10,20 @@ const SendIcon = ({ className }) => (
   </svg>
 );
 
+const ImageIcon = ({ className }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.6" />
+    <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M21 15l-5-5L5 21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const CloseIcon = ({ className }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
 /* ------------------------------------------------------------------ */
 /*  Animated brand logo/avatar — glow breathing, twinkling spark, and */
 /*  a bouncing accent dot at rest; an extra pulse ring while "active" */
@@ -106,6 +120,13 @@ const TypingIndicator = () => (
 
 const MessageBubble = ({ message }) => {
   const isUser = message.role === 'user';
+  // Photos attached to this message; tolerates both array form (current)
+  // and a legacy single-string form from older stored messages.
+  const images = Array.isArray(message.image)
+    ? message.image
+    : message.image
+      ? [message.image]
+      : [];
   const time = message.timestamp
     ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
@@ -121,7 +142,19 @@ const MessageBubble = ({ message }) => {
               : 'px-4 py-2.5 rounded-2xl rounded-tl-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-gray-800 dark:text-slate-200 shadow-sm'
           }
         >
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
+          {images.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {images.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`Uploaded skin photo ${i + 1}`}
+                  className="max-h-40 max-w-[160px] rounded-xl border border-white/20 object-cover"
+                />
+              ))}
+            </div>
+          )}
+          {message.content && <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>}
         </div>
         {time && (
           <span className="mt-1 text-[10px] text-gray-400 dark:text-slate-500 px-1">{time}</span>
@@ -180,10 +213,22 @@ const EmptyState = ({ onPick }) => (
 const ChatBox = ({ onSend, initialMessages = [], placeholder = 'Message Skin Affairs…' }) => {
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState('');
+  // Attached photos as base64 data URLs (up to MAX_IMAGES per message),
+  // shown as previews before sending and rendered in the user bubble after.
+  const [images, setImages] = useState([]);
+  const [imageError, setImageError] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
   const textareaRef = useRef(null);
   const scrollAnchorRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const MAX_IMAGE_SIZE = 8 * 1024 * 1024; // 8MB
+  const MAX_IMAGES = 5;
+
+  // Rehydrate from latest server state whenever the chat's messages change
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
 
   // Auto-scroll to newest message
   useEffect(() => {
@@ -204,28 +249,81 @@ const ChatBox = ({ onSend, initialMessages = [], placeholder = 'Message Skin Aff
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
+  // Validates selected files (type, size, count) then reads each into a
+  // base64 data URL and appends it to the attachments array.
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    setImageError('');
+    if (!files.length) return;
+    if (files.some((f) => !f.type.startsWith('image/'))) {
+      setImageError('Please choose only image files.');
+      return;
+    }
+    if (files.some((f) => f.size > MAX_IMAGE_SIZE)) {
+      setImageError('Images are too large (max 8MB each).');
+      return;
+    }
+    if (images.length + files.length > MAX_IMAGES) {
+      setImageError(`You can attach up to ${MAX_IMAGES} images per message.`);
+      return;
+    }
+    const readers = files.map(
+      (file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        })
+    );
+    Promise.all(readers)
+      .then((results) => setImages((prev) => [...prev, ...results]))
+      .catch(() => setImageError('Could not read one of those images. Try again.'));
+  };
+
+  const removeImage = (index) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImageError('');
+  };
+
   const handleSend = useCallback(
     async (overrideText) => {
       const text = (overrideText ?? input).trim();
-      if (!text || isTyping) return;
+      const hasImages = images.length > 0;
+      // A message can be sent with text, photos, or both — but never while
+      // a request is already in flight, and never over the image cap.
+      if ((!text && !hasImages) || isTyping) return;
+      if (images.length > MAX_IMAGES) {
+        setImageError(`You can attach up to ${MAX_IMAGES} images per message.`);
+        return;
+      }
 
-      const userMessage = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: Date.now() };
+      // Optimistically append the user message so it renders instantly; the
+      // parent reconciles from the server afterwards.
+      const userMessage = { id: crypto.randomUUID(), role: 'user', content: text, image: hasImages ? [...images] : [], timestamp: Date.now() };
       setMessages((prev) => [...prev, userMessage]);
       setInput('');
+      setImages([]);
+      setImageError('');
       resetTextareaHeight();
       setIsTyping(true);
 
       try {
         const reply = onSend
-          ? await onSend(text)
+          ? await onSend(text, hasImages ? [...images] : undefined)
           : await new Promise((resolve) =>
               setTimeout(() => resolve("Thanks for your question — connect this component's onSend prop to your backend to get real answers here."), 900)
             );
 
-        setMessages((prev) => [
-          ...prev,
-          { id: crypto.randomUUID(), role: 'assistant', content: String(reply), timestamp: Date.now() },
-        ]);
+        // When a real onSend is wired up, the parent is responsible for
+        // adding the assistant reply (via updated prop messages). Only the
+        // standalone demo fallback appends locally.
+        if (!onSend) {
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), role: 'assistant', content: String(reply), timestamp: Date.now() },
+          ]);
+        }
       } catch (err) {
         setMessages((prev) => [
           ...prev,
@@ -240,7 +338,7 @@ const ChatBox = ({ onSend, initialMessages = [], placeholder = 'Message Skin Aff
         setIsTyping(false);
       }
     },
-    [input, isTyping, onSend]
+    [input, images, isTyping, onSend]
   );
 
   const handleKeyDown = (e) => {
@@ -284,7 +382,42 @@ const ChatBox = ({ onSend, initialMessages = [], placeholder = 'Message Skin Aff
 
       {/* Input */}
       <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 flex-shrink-0">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+        {images.length > 0 && (
+          <div className="mb-2 ml-1 flex flex-wrap items-center gap-2">
+            {images.map((src, i) => (
+              <div key={i} className="relative">
+                <img src={src} alt={`Attachment preview ${i + 1}`} className="h-16 w-16 rounded-xl object-cover border border-slate-300 dark:border-slate-700" />
+                <button
+                  onClick={() => removeImage(i)}
+                  aria-label="Remove image"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900/80 text-white flex items-center justify-center hover:bg-slate-900 transition-colors"
+                >
+                  <CloseIcon className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            <span className="text-[11px] text-gray-400 dark:text-slate-500">
+              {images.length}/{MAX_IMAGES} attached for skin analysis
+            </span>
+          </div>
+        )}
         <div className="flex items-end gap-2 rounded-2xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 focus-within:ring-2 focus-within:ring-emerald-500 transition-shadow">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isTyping}
+            aria-label="Attach image"
+            className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <ImageIcon className="w-5 h-5" />
+          </button>
           <textarea
             ref={textareaRef}
             value={input}
@@ -296,15 +429,16 @@ const ChatBox = ({ onSend, initialMessages = [], placeholder = 'Message Skin Aff
           />
           <button
             onClick={() => handleSend()}
-            disabled={!input.trim() || isTyping}
+            disabled={(!input.trim() && images.length === 0) || isTyping}
             aria-label="Send message"
             className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-gradient-to-r from-[#A456F7] to-[#3D81F6] text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all"
           >
             <SendIcon className="w-4 h-4" />
           </button>
         </div>
+        {imageError && <p className="mt-1 px-1 text-[11px] text-red-500">{imageError}</p>}
         <p className="mt-1.5 px-1 text-[11px] text-gray-400 dark:text-slate-500">
-          Enter to send • Shift+Enter for a new line
+          Enter to send • Shift+Enter for a new line • Attach up to {MAX_IMAGES} photos for skin analysis
         </p>
       </div>
     </div>
