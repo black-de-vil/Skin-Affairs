@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import Markdown from './Markdown';
 
 /* ------------------------------------------------------------------ */
 /*  Inline icons — no extra icon library dependency required          */
@@ -74,138 +75,6 @@ const DefaultUserAvatar = ({ name }) => (
 );
 
 /* ------------------------------------------------------------------ */
-/*  Lightweight markdown — code fences, bold, italic, inline code,    */
-/*  links, and simple lists. No external dependency, no raw HTML.     */
-/* ------------------------------------------------------------------ */
-
-const splitCodeBlocks = (content) => {
-  const regex = /```(\w+)?\n?([\s\S]*?)```/g;
-  const blocks = [];
-  let lastIndex = 0;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      blocks.push({ type: 'text', value: content.slice(lastIndex, match.index) });
-    }
-    blocks.push({ type: 'code', lang: match[1] || '', value: match[2].replace(/\n$/, '') });
-    lastIndex = regex.lastIndex;
-  }
-  if (lastIndex < content.length) {
-    blocks.push({ type: 'text', value: content.slice(lastIndex) });
-  }
-  return blocks;
-};
-
-const parseInline = (text, keyBase) => {
-  const pattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*|\[[^\]]+\]\([^)]+\))/g;
-  return text
-    .split(pattern)
-    .filter((part) => part !== undefined && part !== '')
-    .map((part, i) => {
-      const key = `${keyBase}-${i}`;
-      if (/^`[^`]+`$/.test(part)) {
-        return (
-          <code key={key} className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-[0.85em] font-mono text-pink-600 dark:text-pink-400">
-            {part.slice(1, -1)}
-          </code>
-        );
-      }
-      if (/^\*\*[^*]+\*\*$/.test(part)) {
-        return <strong key={key} className="font-semibold">{part.slice(2, -2)}</strong>;
-      }
-      if (/^\*[^*]+\*$/.test(part)) {
-        return <em key={key}>{part.slice(1, -1)}</em>;
-      }
-      const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (linkMatch) {
-        return (
-          <a
-            key={key}
-            href={linkMatch[2]}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-700 dark:hover:text-blue-300"
-          >
-            {linkMatch[1]}
-          </a>
-        );
-      }
-      return part;
-    });
-};
-
-const isListParagraph = (lines) => lines.length > 0 && lines.every((l) => /^\s*([-*]|\d+\.)\s+/.test(l));
-
-const renderParagraph = (text, key) => {
-  const lines = text.split('\n').filter((l) => l.trim() !== '');
-  if (isListParagraph(lines)) {
-    const ordered = /^\s*\d+\.\s+/.test(lines[0]);
-    const items = lines.map((l) => l.replace(/^\s*([-*]|\d+\.)\s+/, ''));
-    const ListTag = ordered ? 'ol' : 'ul';
-    return (
-      <ListTag key={key} className={`pl-5 space-y-1 ${ordered ? 'list-decimal' : 'list-disc'}`}>
-        {items.map((item, i) => (
-          <li key={`${key}-li-${i}`} className="text-sm leading-relaxed">
-            {parseInline(item, `${key}-li-${i}`)}
-          </li>
-        ))}
-      </ListTag>
-    );
-  }
-  return (
-    <p key={key} className="text-sm leading-relaxed whitespace-pre-wrap">
-      {parseInline(text, key)}
-    </p>
-  );
-};
-
-const CodeBlock = ({ lang, value }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable — silently ignore */
-    }
-  };
-
-  return (
-    <div className="rounded-lg overflow-hidden border border-slate-700/60 bg-slate-900">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/80 text-[11px] text-slate-400">
-        <span className="font-mono">{lang || 'text'}</span>
-        <button onClick={handleCopy} className="flex items-center gap-1 hover:text-slate-200 transition-colors">
-          {copied ? <CheckIcon className="w-3.5 h-3.5" /> : <CopyIcon className="w-3.5 h-3.5" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre className="px-3 py-2.5 overflow-x-auto text-[13px] leading-relaxed text-slate-100 font-mono">
-        <code>{value}</code>
-      </pre>
-    </div>
-  );
-};
-
-const MessageContent = ({ content }) => {
-  const blocks = splitCodeBlocks(content);
-  return (
-    <div className="space-y-2">
-      {blocks.map((block, i) => {
-        if (block.type === 'code') {
-          return <CodeBlock key={i} lang={block.lang} value={block.value} />;
-        }
-        return block.value
-          .split(/\n{2,}/)
-          .filter((p) => p.trim() !== '')
-          .map((p, j) => renderParagraph(p, `${i}-${j}`));
-      })}
-    </div>
-  );
-};
-
-/* ------------------------------------------------------------------ */
 /*  Message                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -228,7 +97,6 @@ const Message = ({
   avatar,
   userAvatar,
   userName = 'You',
-  assistantName = 'Skin Affairs',
   onCopy,
   onRegenerate,
   onFeedback,
@@ -288,7 +156,7 @@ const Message = ({
 
       <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[75%] min-w-0`}>
         <div className={bubbleClass}>
-          <MessageContent content={content} />
+          <Markdown content={content} />
           {status === 'streaming' && (
             <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-current align-text-bottom animate-pulse" />
           )}

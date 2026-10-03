@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAppContext } from '../context/AppContext';
 
@@ -27,10 +27,12 @@ const CloseIcon = ({ className }) => (
 /*  Loading / empty states                                            */
 /* ------------------------------------------------------------------ */
 
-const ImageSkeleton = () => (
+const SKELETON_HEIGHTS = [200, 260, 180, 300, 220, 250, 190, 280, 210, 240];
+
+const ImageSkeleton = ({ index }) => (
   <div
-    className="mb-4 break-inside-avoid rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 animate-pulse"
-    style={{ height: `${180 + Math.round(Math.random() * 140)}px` }}
+    className="mb-4 break-inside-avoid rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 motion-safe:animate-pulse"
+    style={{ height: `${SKELETON_HEIGHTS[index % SKELETON_HEIGHTS.length]}px` }}
   />
 );
 
@@ -87,6 +89,20 @@ const CommunityCard = ({ image, liked, onToggleLike, onOpen }) => (
 );
 
 const Lightbox = ({ image, onClose }) => {
+  useEffect(() => {
+    if (!image) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [image, onClose]);
+
   if (!image) return null;
   return (
     <div className="fixed inset-0 z-[100] bg-black/85 flex items-center justify-center p-4" onClick={onClose}>
@@ -122,25 +138,25 @@ const Community = () => {
   const [error, setError] = useState(null);
   const [openImage, setOpenImage] = useState(null);
 
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       // Adjust this endpoint to match your backend once it's connected
       const { data } = await axios.get('/api/user/published-images');
       setImages(data.success ? data.images : []);
-    } catch (err) {
+    } catch {
       // No backend yet, or the request failed — fail gracefully instead of crashing
       setError("Couldn't load community images — check that your backend/API is connected.");
       setImages([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchImages();
-  }, []);
+  }, [fetchImages]);
 
   const toggleLike = async (image) => {
     if (!user) return; // swap for navigate('/login') if you want to force sign-in
@@ -169,14 +185,14 @@ const Community = () => {
       if (!data?.success) {
         setImages((prev) => prev.map((img) => (img._id === image._id ? image : img)));
       }
-    } catch (err) {
+    } catch {
       // Revert on failure
       setImages((prev) => prev.map((img) => (img._id === image._id ? image : img)));
     }
   };
 
   return (
-    <div className="flex-1 h-screen overflow-y-auto bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-6">
+    <div className="flex-1 min-w-0 h-full overflow-y-auto overscroll-contain chat-scroll bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-6 pt-16 md:pt-6">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">Community</h1>
@@ -194,7 +210,7 @@ const Community = () => {
         {loading ? (
           <div className="columns-2 sm:columns-3 lg:columns-4 gap-4">
             {Array.from({ length: 10 }).map((_, i) => (
-              <ImageSkeleton key={i} />
+              <ImageSkeleton key={i} index={i} />
             ))}
           </div>
         ) : images.length === 0 ? (
