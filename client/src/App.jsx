@@ -1,35 +1,42 @@
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import ChatBox from './components/ChatBox'
 import Credits from './pages/Credits'
 import Community from './pages/Community'
 import Auth from './pages/Auth'
-import { Routes, Route } from 'react-router-dom'
 import { useAppContext } from './context/AppContext'
-import { assets } from './assets/assets'
+
+// Desktop starts with the sidebar open; phones start closed so the chat is
+// usable immediately instead of being hidden behind the menu and its backdrop.
+const prefersOpenSidebar = () =>
+  typeof window === 'undefined' ? true : window.matchMedia('(min-width: 768px)').matches
 
 const App = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isMenuOpen, setIsMenuOpen] = useState(prefersOpenSidebar)
   const { user, loading, selectedChat, sendMessage } = useAppContext()
 
   // Normalise stored chat messages (including any attached skin photos)
-  // into the shape ChatBox expects.
+  // into the shape ChatBox expects. Keyed off the messages array rather than
+  // the chat object so a background refetch that returns identical messages
+  // doesn't churn the whole list.
+  const messages = selectedChat?.messages
   const initialMessages = useMemo(
     () =>
-      (selectedChat?.messages || []).map((m, i) => ({
+      (messages || []).map((m, i) => ({
         id: m._id || `${m.role}-${m.timestamp}-${i}`,
         role: m.role,
         content: m.content,
         image: m.image || [],
         timestamp: m.timestamp,
       })),
-    [selectedChat]
+    [messages]
   )
 
   if (loading) {
     return (
-      <div className='w-screen h-screen flex items-center justify-center bg-gradient-to-b from-[#242124] to-[#000000]'>
-        <div className='w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin' />
+      <div className='w-full h-dvh flex items-center justify-center bg-gradient-to-b from-[#242124] to-[#000000]'>
+        <div className='w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full motion-safe:animate-spin' />
       </div>
     )
   }
@@ -39,32 +46,27 @@ const App = () => {
   }
 
   return (
-    <div className='dark:bg-gradient-to-b from-[#242124] to-[#000000] dark:text-white'>
-      {!isMenuOpen && (
-        <img 
-          src={assets.menu_icon} 
-          className='absolute top-3 left-3 w-8 h-8 cursor-pointer md:hidden not-dark:invert z-20' 
-          onClick={() => setIsMenuOpen(true)} 
-          alt="Open Menu" 
+    <div className='flex h-dvh w-full overflow-hidden bg-slate-50 dark:bg-slate-950 dark:text-white'>
+      <Sidebar isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
+      <Routes>
+        <Route
+          path='/'
+          element={
+            // No `key` here on purpose: a brand-new chat receives its id the
+            // moment the first message is sent, and keying on that id made
+            // React throw ChatBox away mid-request — which is what looked
+            // like the page refreshing on the first message.
+            <ChatBox
+              chatId={selectedChat?._id}
+              initialMessages={initialMessages}
+              onSend={sendMessage}
+            />
+          }
         />
-      )}
-      <div className='flex h-screen w-screen'>
-        <Sidebar isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
-        <Routes>
-          <Route
-            path='/'
-            element={
-              <ChatBox
-                key={selectedChat?._id || 'new'}
-                initialMessages={initialMessages}
-                onSend={sendMessage}
-              />
-            }
-          />
-          <Route path='/credits' element={<Credits />} />
-          <Route path='/community' element={<Community />} />
-        </Routes>
-      </div>
+        <Route path='/credits' element={<Credits />} />
+        <Route path='/community' element={<Community />} />
+        <Route path='*' element={<Navigate to='/' replace />} />
+      </Routes>
     </div>
   )
 }

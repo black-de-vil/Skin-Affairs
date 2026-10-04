@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
 
 @import "tailwindcss";
 
@@ -12,6 +13,63 @@
   font-family: "Outfit", sans-serif;
 }
 
-::-webkit-scrollbar {
-  display: none;
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* Stops the whole page from rubber-banding behind the fixed chat layout */
+  overscroll-behavior: none;
+}
+
+/* Scrollbars used to be hidden globally (`display: none`), which left no way
+   to tell that a long answer or a long chat list could be scrolled at all.
+   They're slim and unobtrusive now instead of invisible. */
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.5) transparent;
+}
+
+.chat-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184 / 0.45);
+  border-radius: 9999px;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(148 163 184 / 0.7);
+}
+
+/* iOS zooms the page in whenever a focused field is under 16px, which reads
+   as the layout jumping around every time the composer is tapped. */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Respect the OS "reduce motion" setting for the animations Tailwind's
+   motion-safe variant doesn't cover (transitions, smooth scrolling). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

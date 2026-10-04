@@ -9,7 +9,9 @@ const ChatSchema = new mongoose.Schema({
             isImage: { type: Boolean, required: true },
             isPublished: { type: Boolean, default: false },
             role: { type: String, required: true },
-            content: { type: String, required: true },
+            // Not required: a message can be photos only, and Mongoose
+            // treats an empty string as a missing required value.
+            content: { type: String, default: '' },
             // Public ImageKit URLs for photos attached by the user to a
             // message (an array because a message can carry up to 5 images).
             image: { type: [String], default: [] },

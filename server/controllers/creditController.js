@@ -1,7 +1,5 @@
-import Stripe from "stripe";
+import getStripe from "../configs/stripe.js";
 import Transaction from "../models/Transaction.js";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Pricing plans kept server-side — never trust a price sent from the client
 export const PLANS = [
@@ -31,6 +29,7 @@ export const purchasePlan = async (req, res) => {
             isPaid: false,
         });
 
+        const stripe = getStripe();
         const session = await stripe.checkout.sessions.create({
             mode: "payment",
             payment_method_types: ["card"],

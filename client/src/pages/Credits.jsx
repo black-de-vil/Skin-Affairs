@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 import { useAppContext } from '../context/AppContext';
 
@@ -140,14 +140,17 @@ const Credits = () => {
       }
     } catch (err) {
       // No backend connected yet, or the request failed — fail gracefully
-      setError("Couldn't start checkout — check that your backend/API is connected.");
+      setError(
+        err?.response?.data?.message ||
+          "Couldn't start checkout — check that your backend/API is connected."
+      );
     } finally {
       setLoadingPlanId(null);
     }
   };
 
   return (
-    <div className="flex-1 h-screen overflow-y-auto bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-8">
+    <div className="flex-1 min-w-0 h-full overflow-y-auto overscroll-contain chat-scroll bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-8 pt-16 md:pt-8">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
