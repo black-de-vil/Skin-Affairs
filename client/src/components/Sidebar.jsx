@@ -9,7 +9,7 @@ export const SkinAffairsLogo = ({ isCollapsed }) => {
       <div className="relative w-12 h-12 md:w-16 md:h-16 flex-shrink-0 flex items-center justify-center">
         {/* Glowing Background Pulse */}
         <div className="absolute inset-0 bg-gradient-to-tr from-pink-400 via-purple-500 to-indigo-500 rounded-full animate-pulse blur-md opacity-40"></div>
-        
+
         {/* Main Avatar Canvas */}
         <div className="relative w-12 h-12 md:w-16 md:h-16 bg-gradient-to-tr from-purple-900 via-indigo-900 to-slate-900 rounded-2xl p-1 shadow-xl border border-purple-500/30 overflow-hidden flex items-center justify-center">
           <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-md">
@@ -46,7 +46,7 @@ export const SkinAffairsLogo = ({ isCollapsed }) => {
               <circle cx="28" cy="28" r="4" fill="#A7F3D0" stroke="#059669" strokeWidth="1" />
               <circle cx="28" cy="28" r="2" fill="#34D399" />
             </g>
-            
+
             <g className="animate-pulse">
               <path d="M72 32 L74 36 L78 38 L74 40 L72 44 L70 40 L66 38 L70 36 Z" fill="#FDE047" />
             </g>
@@ -57,8 +57,8 @@ export const SkinAffairsLogo = ({ isCollapsed }) => {
       {/* Brand Name Header */}
       {!isCollapsed && (
         <div className="flex flex-col">
-          <h1 
-            className="text-3xl text-gray-900 dark:text-white leading-tight" 
+          <h1
+            className="text-3xl text-gray-900 dark:text-white leading-tight"
             style={{ fontFamily: "'Great Vibes', cursive" }}
           >
             Skin Affairs
@@ -79,48 +79,70 @@ const Sidebar = () => {
 
   return (
     <>
+      {/* Scoped thin scrollbar for the Recent Chats list only.
+          Doesn't touch any other scrollbar in the app. */}
+      <style>{`
+        .recent-chats-scroll::-webkit-scrollbar {
+          width: 5px;
+        }
+        .recent-chats-scroll::-webkit-scrollbar-thumb {
+          background: #a0aec0;
+          border-radius: 10px;
+        }
+        .recent-chats-scroll::-webkit-scrollbar-thumb:hover {
+          background: #8b96a8;
+        }
+        .recent-chats-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .recent-chats-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #a0aec0 transparent;
+        }
+      `}</style>
+
       {/* Universal Floating Menu Button */}
       {!isMenuOpen && (
-        <button 
+        <button
           onClick={() => setIsMenuOpen(true)}
           className="fixed top-3 left-3 z-50 p-2 bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 rounded-lg hover:scale-105 transition-all"
           title="Open Sidebar"
         >
-          <img 
-            src={assets.menu_icon} 
-            className="w-5 h-5 not-dark:invert" 
-            alt="Open Menu" 
+          <img
+            src={assets.menu_icon}
+            className="w-5 h-5 not-dark:invert"
+            alt="Open Menu"
           />
         </button>
       )}
 
       {/* Sidebar Container */}
-      <aside 
+      <aside
         className={`fixed md:relative top-0 left-0 z-40 h-screen bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-4 flex flex-col justify-between transition-all duration-300 ease-in-out shrink-0 ${
-          isMenuOpen 
-            ? 'w-64 translate-x-0' 
+          isMenuOpen
+            ? 'w-64 translate-x-0'
             : '-translate-x-full md:translate-x-0 md:w-0 md:p-0 md:overflow-hidden md:border-none'
         }`}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full overflow-y-auto recent-chats-scroll">
           {/* Header Row with Logo and Close Toggle */}
           <div className="flex items-center justify-between">
             <SkinAffairsLogo />
-            <button 
+            <button
               onClick={() => setIsMenuOpen(false)}
               className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
               title="Close Sidebar"
             >
-              <img 
-                src={assets.close_icon} 
-                className="w-5 h-5 cursor-pointer not-dark:invert" 
-                alt="Close Menu" 
+              <img
+                src={assets.close_icon}
+                className="w-5 h-5 cursor-pointer not-dark:invert"
+                alt="Close Menu"
               />
             </button>
           </div>
 
           {/* New Chat Button */}
-          <button 
+          <button
             onClick={() => {
               newChat && newChat();
               setIsMenuOpen(false);
@@ -142,12 +164,18 @@ const Sidebar = () => {
           </div>
 
           {/* Recent Chats Section */}
-          <div className="flex-1 flex flex-col min-h-0 mt-4">
+          {/* min-h-[220px] is the key fix: on short screens, flex-1 alone can
+              squeeze this section down to almost nothing once every other
+              fixed-height block (logo, search, dark mode, credits,
+              community, account) claims its space. The floor guarantees
+              roughly 4 chats stay visible; the outer aside above now also
+              scrolls as a fallback if content still doesn't fit. */}
+          <div className="flex-1 flex flex-col min-h-[220px] mt-4">
             <p className="text-sm text-gray-600 dark:text-gray-400 font-medium mb-2 flex-shrink-0">
               Recent Chats
             </p>
-            
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+
+            <div className="recent-chats-scroll flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
               {chats && chats.length > 0 ? (
                 chats
                   .filter((chat) => {
@@ -155,8 +183,8 @@ const Sidebar = () => {
                     return content.toLowerCase().includes(search.toLowerCase());
                   })
                   .map((chat) => (
-                    <div 
-                      key={chat._id} 
+                    <div
+                      key={chat._id}
                       onClick={() => {
                         setSelectedChat && setSelectedChat(chat);
                         setIsMenuOpen(false); // Closes sidebar on chat click
@@ -171,14 +199,14 @@ const Sidebar = () => {
                           {chat.updatedAt || 'Just now'}
                         </p>
                       </div>
-                      <img 
-                        src={assets.bin_icon} 
+                      <img
+                        src={assets.bin_icon}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (deleteChat) deleteChat(chat._id);
                         }}
-                        className="hidden group-hover:block w-4 h-4 cursor-pointer not-dark:invert flex-shrink-0" 
-                        alt="Delete" 
+                        className="hidden group-hover:block w-4 h-4 cursor-pointer not-dark:invert flex-shrink-0"
+                        alt="Delete"
                       />
                     </div>
                   ))
@@ -195,10 +223,10 @@ const Sidebar = () => {
               <p className="text-gray-800 dark:text-gray-200">Dark Mode</p>
             </div>
             <label className="relative inline-flex cursor-pointer">
-              <input 
-                onChange={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
-                type="checkbox" 
-                className="sr-only peer" 
+              <input
+                onChange={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                type="checkbox"
+                className="sr-only peer"
                 checked={theme === 'dark'}
               />
               <div className="w-9 h-5 bg-gray-400 rounded-full peer-checked:bg-purple-600 transition-all"></div>
@@ -207,11 +235,11 @@ const Sidebar = () => {
           </div>
 
           {/* Credit Purchases Option */}
-          <div 
+          <div
             onClick={() => {
               navigate('/credits');
               setIsMenuOpen(false); // Closes sidebar on Credits click
-            }} 
+            }}
             className="flex items-center gap-2 p-3 mt-2 border border-gray-300 dark:border-white/15 rounded-md cursor-pointer hover:scale-[1.02] transition-all flex-shrink-0 bg-white dark:bg-slate-800/50"
           >
             <img src={assets.diamond_icon} className="w-4.5 not-dark:invert" alt="" />
@@ -222,11 +250,11 @@ const Sidebar = () => {
           </div>
 
           {/* Community Images */}
-          <div 
-            onClick={() => { 
+          <div
+            onClick={() => {
               navigate && navigate('/community');
               setIsMenuOpen(false); // Closes sidebar on Community Images click
-            }} 
+            }}
             className="flex items-center gap-2 p-3 mt-2 border border-gray-300 dark:border-white/15 rounded-md cursor-pointer hover:scale-[1.02] transition-all flex-shrink-0 bg-white dark:bg-slate-800/50"
           >
             <img src={assets.gallery_icon} className="w-4.5 not-dark:invert" alt="" />
@@ -242,11 +270,11 @@ const Sidebar = () => {
               {user ? user.name : 'Login your account'}
             </p>
             {user && (
-              <img 
-                src={assets.logout_icon} 
+              <img
+                src={assets.logout_icon}
                 onClick={() => logout && logout()}
-                className="h-5 w-5 cursor-pointer hidden not-dark:invert group-hover:block flex-shrink-0" 
-                alt="Logout" 
+                className="h-5 w-5 cursor-pointer hidden not-dark:invert group-hover:block flex-shrink-0"
+                alt="Logout"
               />
             )}
           </div>
@@ -255,7 +283,7 @@ const Sidebar = () => {
 
       {/* Backdrop Overlay for Mobile Screen Sizes */}
       {isMenuOpen && (
-        <div 
+        <div
           onClick={() => setIsMenuOpen(false)}
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
         />
