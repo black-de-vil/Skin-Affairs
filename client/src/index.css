@@ -31,6 +31,9 @@ body {
 .chat-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgb(148 163 184 / 0.5) transparent;
+  /* Momentum scrolling on older iOS, where lists otherwise stop dead
+     instead of gliding. */
+  -webkit-overflow-scrolling: touch;
 }
 
 .chat-scroll::-webkit-scrollbar {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import ChatBox from './components/ChatBox'
@@ -32,6 +32,16 @@ const App = () => {
       })),
     [messages]
   )
+
+  // prefersOpenSidebar only ran at mount, so rotating a tablet or resizing a
+  // window left the sidebar in the wrong state — open and covering the chat
+  // on a narrow screen, or closed with no visible way back on a wide one.
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 768px)')
+    const onChange = (event) => setIsMenuOpen(event.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
 
   if (loading) {
     return (

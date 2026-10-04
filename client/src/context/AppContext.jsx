@@ -182,14 +182,15 @@ export const AppContextProvider = ({ children }) => {
             // the server never actually deleted it.
             return;
         }
-        setChats((prev) => {
-            const next = prev.filter((c) => String(c._id) !== String(chatId));
-            setSelectedChat((current) =>
-                String(current?._id) === String(chatId) ? next[0] || null : current
-            );
-            return next;
-        });
-    }, []);
+        // Computed outside the updaters: a setState updater has to be pure,
+        // and nesting setSelectedChat inside setChats meant React re-running
+        // the updater fired the inner update a second time.
+        const next = chats.filter((c) => String(c._id) !== String(chatId));
+        setChats(next);
+        setSelectedChat((current) =>
+            String(current?._id) === String(chatId) ? next[0] || null : current
+        );
+    }, [chats]);
 
     const ensureChat = async () => {
         if (selectedChat?._id) return selectedChat;
