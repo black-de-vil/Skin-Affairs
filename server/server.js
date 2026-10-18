@@ -39,5 +39,10 @@ const startServer = async () => {
         process.exit(1)
     }
 }
+// at the bottom
+if (process.env.NODE_ENV !== "production") {
+  app.listen(process.env.PORT || 3000, () => console.log("Server running"));
+}
+export default app;
 
 startServer()
